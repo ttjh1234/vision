@@ -1,0 +1,6 @@
+*neptune
+*__pycache__
+*.h5
+*.data
+tryto.py
+assets
