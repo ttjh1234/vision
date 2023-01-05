@@ -1,48 +1,16 @@
 import torch
-import numpy as np
-import matplotlib.pyplot as plt
 import os
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(os.path.dirname(__file__)))))
 from tqdm import tqdm
-from copy import deepcopy
-from collections import defaultdict as ddict
-import matplotlib as mpl
-from torch.utils.data import TensorDataset, DataLoader,Dataset, random_split
-import json
-from tqdm import tqdm
-import torchvision
-import torchvision.transforms as transforms
 import torch.nn as nn
 import torch.nn.functional as F
 import math
 import time
-from torchvision import models
+from XAI.Integrated_gradient.implement.ig_image_pt import *
+from vision.utils.data import *
 
-# Cifar10 Data Fetch & Preprocessing & Split 
-
-transform = transforms.Compose([transforms.RandomCrop(32,4),transforms.RandomHorizontalFlip(),transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
-transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
-
-trainset = torchvision.datasets.CIFAR10("../assets/data/cifar10/train",train=True,download=False,transform=transform)
-test_set = torchvision.datasets.CIFAR10("../assets/data/cifar10/test",train=False,download=False,transform=transform)
-
-train_dataset, valid_dataset= random_split(trainset, [45000, 5000],generator=torch.Generator().manual_seed(42))
-
-# label check
-label_dict=ddict(int)
-for i in train_dataset:
-    label_dict[i[1]]+=1
-    
-# 0 ~ 9 label exists,
-# Some detail, 
-classes = ['plane', 'car', 'bird', 'cat',
-           'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
-
-train_loader=DataLoader(train_dataset,batch_size=128,shuffle=True)
-valid_loader=DataLoader(valid_dataset,batch_size=128,shuffle=True)
-test_loader=DataLoader(test_set,batch_size=128,shuffle=False)
-
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
 
 # Model Define 
 
@@ -231,68 +199,55 @@ def epoch_time(start_time, end_time):
 
 
 
-
-model=image_classification(10).to('cuda')
-resnet=models.resnet18(pretrained=False)
-num_classes=10
-num_ftrs=resnet.fc.in_features
-resnet.fc=nn.Linear(num_ftrs,num_classes)
-
-
-
-resnet=ResNet18()
-print(resnet)
-resnet.to('cuda')
-
-criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(resnet.parameters(), lr=0.01,
-                      momentum=0.9, weight_decay=5e-4)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
-
-
-optimizer = torch.optim.Adam(resnet.parameters(),lr=0.00005)
-criterion=nn.CrossEntropyLoss()
-
-N_EPOCHS = 200
-CLIP = 1
-best_valid_loss = float('inf')
-patient=0
-
-for epoch in tqdm(range(N_EPOCHS)):
+if __name__ == "__main__":
     
-    start_time = time.time()
+    # Cifar10 Data Fetch & Preprocessing & Split 
+    train_loader,valid_loader,test_loader,classes=data_loader_cifar10()
     
-    train_loss = train(resnet, train_loader, optimizer, criterion, CLIP, device='cuda')
-    valid_loss = evaluate(resnet, valid_loader, criterion, device='cuda')
-    
-    scheduler.step()
-    
-    end_time = time.time()
-    
-    epoch_mins, epoch_secs = epoch_time(start_time, end_time)
-    
-    print(f'Epoch: {epoch+1:02} | Time: {epoch_mins}m {epoch_secs}s')
-    print(f'\tTrain Loss: {train_loss:.3f}')
-    print(f'\t Val. Loss: {valid_loss:.3f}')
-    
-    if valid_loss < best_valid_loss:
-        patient=0
-        best_valid_loss = valid_loss
-        torch.save(resnet.state_dict(), '../assets/model/resnet18.pt')
-    else:
-        patient+=1
-        if patient>=200:
-            break
+    # Model
+    resnet=ResNet18()
+    resnet.to('cuda')
 
-resnet.load_state_dict(torch.load('../assets/model/resnet18.pt'))
-test_loss = evaluate(resnet, test_loader, criterion,'cuda')
-print(f'| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |')
+    criterion = nn.CrossEntropyLoss()
+    optimizer = torch.optim.SGD(resnet.parameters(), lr=0.01,
+                        momentum=0.9, weight_decay=5e-4)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
-accuracy_score(model,train_loader,valid_loader,test_loader,device='cuda')
+    N_EPOCHS = 200
+    CLIP = 1
+    best_valid_loss = float('inf')
+    patient=0
 
+    for epoch in tqdm(range(N_EPOCHS)):
+        
+        start_time = time.time()
+        
+        train_loss = train(resnet, train_loader, optimizer, criterion, CLIP, device='cuda')
+        valid_loss = evaluate(resnet, valid_loader, criterion, device='cuda')
+        
+        scheduler.step()
+        
+        end_time = time.time()
+        
+        epoch_mins, epoch_secs = epoch_time(start_time, end_time)
+        
+        print(f'Epoch: {epoch+1:02} | Time: {epoch_mins}m {epoch_secs}s')
+        print(f'\tTrain Loss: {train_loss:.3f}')
+        print(f'\t Val. Loss: {valid_loss:.3f}')
+        
+        if valid_loss < best_valid_loss:
+            patient=0
+            best_valid_loss = valid_loss
+            #torch.save(resnet.state_dict(), '../assets/model/resnet18.pt')
+        else:
+            patient+=1
+            if patient>=200:
+                break
 
+    resnet.load_state_dict(torch.load('../assets/model/resnet18.pt'))
+    test_loss = evaluate(resnet, test_loader, criterion,'cuda')
+    print(f'| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |')
 
-
-
+    accuracy_score(resnet,train_loader,valid_loader,test_loader,device='cuda')
 
 
