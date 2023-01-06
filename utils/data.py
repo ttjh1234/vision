@@ -13,15 +13,15 @@ def data_loader_cifar10(path=None):
     # Cifar10 Data Fetch & Preprocessing & Split 
 
     transform = transforms.Compose([transforms.RandomCrop(32,4),transforms.RandomHorizontalFlip(),transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
-    transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
+    transform2 = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
 
     if path:
         trainset = torchvision.datasets.CIFAR10(path+'/train',train=True,download=False,transform=transform)
-        test_set = torchvision.datasets.CIFAR10(path+'/test',train=False,download=False,transform=transform)
+        test_set = torchvision.datasets.CIFAR10(path+'/test',train=False,download=False,transform=transform2)
 
     else:
         trainset = torchvision.datasets.CIFAR10("../assets/data/cifar10/train",train=True,download=False,transform=transform)
-        test_set = torchvision.datasets.CIFAR10("../assets/data/cifar10/test",train=False,download=False,transform=transform)
+        test_set = torchvision.datasets.CIFAR10("../assets/data/cifar10/test",train=False,download=False,transform=transform2)
     train_dataset, valid_dataset= random_split(trainset, [45000, 5000],generator=torch.Generator().manual_seed(42))
 
     # label check
@@ -58,3 +58,29 @@ def rescale_data(x,mean=None,std=None):
     x=np.transpose(x,[1,2,0])
     return x
 
+
+def data_loader_mnist(path=None):
+    transform = transforms.Compose([transforms.RandomCrop(28,4),transforms.RandomHorizontalFlip(),transforms.ToTensor(),transforms.Normalize((0.3081), (0.1307))])
+    transform2 = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.3081), (0.1307))])
+
+    if path:
+        trainset=torchvision.datasets.MNIST(path+"/train",train=True,download=False,transform=transform)
+        test_set=torchvision.datasets.MNIST(path+"/test",train=False,download=False,transform=transform2)
+    else:
+        trainset=torchvision.datasets.MNIST("../assets/data/mnist/train",train=True,download=False,transform=transform)
+        test_set=torchvision.datasets.MNIST("../assets/data/mnist/test",train=False,download=False,transform=transform2)
+    train_dataset, valid_dataset= random_split(trainset, [50000, 10000],generator=torch.Generator().manual_seed(42))
+
+    # label check
+    label_dict=ddict(int)
+    for i in train_dataset:
+        label_dict[i[1]]+=1
+
+    # 0 ~ 9 label exists,    
+    classes=sorted(list(label_dict.keys()))
+
+    train_loader=DataLoader(train_dataset,batch_size=128,shuffle=True)
+    valid_loader=DataLoader(valid_dataset,batch_size=128,shuffle=True)
+    test_loader=DataLoader(test_set,batch_size=128,shuffle=False)
+
+    return train_loader,valid_loader, test_loader, classes

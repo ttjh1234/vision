@@ -8,9 +8,18 @@ import torch.nn.functional as F
 import math
 import time
 from XAI.Integrated_gradient.implement.ig_image_pt import *
-from vision.utils.data import *
+from torch.utils.data import TensorDataset, DataLoader,Dataset, random_split
+import torchvision
+import torchvision.transforms as transforms
+import neptune.new as neptune
+import argparse
 
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
+try:
+    from vision.utils.data import *
+    from vision.utils.neptune_arg import *
+except:
+    from data import *
+    from neptune_arg import *
 
 # Model Define 
 
@@ -67,11 +76,12 @@ class BasicBlock(nn.Module):
         return out
 
 class ResNet(nn.Module):
-    def __init__(self, block, num_blocks, num_classes=10):
+    def __init__(self,block, num_blocks, in_channel=3, num_classes=10):
         super(ResNet, self).__init__()
         self.in_planes = 64
 
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=3,
+        # conv1 in_channel : Cifar10 : 3, Mnist : 1
+        self.conv1 = nn.Conv2d(in_channel, 64, kernel_size=3,
                                stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.layer1 = self._make_layer(block, 64, num_blocks[0], stride=1)
@@ -99,10 +109,10 @@ class ResNet(nn.Module):
         out = self.linear(out)
         return out
     
-def ResNet18():
-    return ResNet(BasicBlock, [2, 2, 2, 2])
+def ResNet18(in_channel):
+    return ResNet(BasicBlock, [2, 2, 2, 2],in_channel=in_channel)
 
-def train(model, iterator, optimizer, criterion, clip, device):
+def train(model, iterator, optimizer, criterion, device, run_flag=0):
     
     model.train()
     
@@ -122,10 +132,12 @@ def train(model, iterator, optimizer, criterion, clip, device):
         #torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
         optimizer.step()
         epoch_loss += loss.item()
+        if run_flag==1:
+            run["train/train_iter_loss"].log(loss.item())
 
     return epoch_loss / len(iterator)
 
-def evaluate(model, iterator, criterion, device):
+def evaluate(model, iterator, criterion, device, run_flag=0):
     
     model.eval()
     epoch_loss = 0
@@ -139,6 +151,8 @@ def evaluate(model, iterator, criterion, device):
             
             loss = criterion(output, trg)
             epoch_loss += loss.item()
+            if run_flag==1:
+                run["valid/valid_iter_loss"].log(loss.item())
 
     return epoch_loss / len(iterator)
 
@@ -198,56 +212,136 @@ def epoch_time(start_time, end_time):
     return elapsed_mins, elapsed_secs
 
 
-
 if __name__ == "__main__":
     
-    # Cifar10 Data Fetch & Preprocessing & Split 
-    train_loader,valid_loader,test_loader,classes=data_loader_cifar10()
+    parser=argparse.ArgumentParser(description='Model Train')
+    parser.add_argument('--dataset',required=True, help='Dataset you want to fit')
+    parser.add_argument('--experiment',required=True, default='0',help='Dataset you want to fit')
+    parser.add_argument('--run',required=True, default='0',help='Dataset you want to fit')
+    args=parser.parse_args()
     
-    # Model
-    resnet=ResNet18()
-    resnet.to('cuda')
+    data_set=args.dataset
+    experiment=args.experiment
+    run_flag=int(args.run)
+    
+    if run_flag==1:
+        path='../assets/neptune/neptune_args.txt'
+        neptune_key=fetch_neptune_key(path)
 
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.SGD(resnet.parameters(), lr=0.01,
-                        momentum=0.9, weight_decay=5e-4)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+        run = neptune.init(
+            project=neptune_key['project'],
+            api_token=neptune_key['api_token'],
+        )
 
-    N_EPOCHS = 200
-    CLIP = 1
-    best_valid_loss = float('inf')
-    patient=0
+    if data_set=='cifar10':    
+        # Cifar10 Data Fetch & Preprocessing & Split 
+        train_loader,valid_loader,test_loader,classes=data_loader_cifar10()
 
-    for epoch in tqdm(range(N_EPOCHS)):
-        
-        start_time = time.time()
-        
-        train_loss = train(resnet, train_loader, optimizer, criterion, CLIP, device='cuda')
-        valid_loss = evaluate(resnet, valid_loader, criterion, device='cuda')
-        
-        scheduler.step()
-        
-        end_time = time.time()
-        
-        epoch_mins, epoch_secs = epoch_time(start_time, end_time)
-        
-        print(f'Epoch: {epoch+1:02} | Time: {epoch_mins}m {epoch_secs}s')
-        print(f'\tTrain Loss: {train_loss:.3f}')
-        print(f'\t Val. Loss: {valid_loss:.3f}')
-        
-        if valid_loss < best_valid_loss:
-            patient=0
-            best_valid_loss = valid_loss
-            #torch.save(resnet.state_dict(), '../assets/model/resnet18.pt')
-        else:
-            patient+=1
-            if patient>=200:
-                break
+        # Model
+        resnet=ResNet18(3)
+        resnet.to('cuda')
 
-    resnet.load_state_dict(torch.load('../assets/model/resnet18.pt'))
-    test_loss = evaluate(resnet, test_loader, criterion,'cuda')
-    print(f'| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |')
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(resnet.parameters(), lr=0.01,
+                            momentum=0.9, weight_decay=5e-4)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
-    accuracy_score(resnet,train_loader,valid_loader,test_loader,device='cuda')
+        N_EPOCHS = 200
+        CLIP = 1
+        best_valid_loss = float('inf')
+        patient=0
 
+        for epoch in tqdm(range(N_EPOCHS)):
+            
+            start_time = time.time()
+            
+            train_loss = train(resnet, train_loader, optimizer, criterion, CLIP, device='cuda',run_flag=run_flag)
+            valid_loss = evaluate(resnet, valid_loader, criterion, device='cuda',run_flag=run_flag)
+            
+            scheduler.step()
+            
+            end_time = time.time()
+            
+            epoch_mins, epoch_secs = epoch_time(start_time, end_time)
+            
+            print(f'Epoch: {epoch+1:02} | Time: {epoch_mins}m {epoch_secs}s')
+            print(f'\tTrain Loss: {train_loss:.3f}')
+            print(f'\t Val. Loss: {valid_loss:.3f}')
+            if run_flag==1:
+                run["train/train_epoch_loss"].log(train_loss)
+                run["valid/valid_epoch_loss"].log(valid_loss)
+            
+            
+            if valid_loss < best_valid_loss:
+                patient=0
+                best_valid_loss = valid_loss
+                torch.save(resnet.state_dict(), '../assets/model/resnet18-{}.pt'.format(experiment))
+            else:
+                patient+=1
+                if patient>=200:
+                    break
 
+        run.stop()
+        resnet.load_state_dict(torch.load('../assets/model/resnet18-{}.pt'.format(experiment)))
+        test_loss = evaluate(resnet, test_loader, criterion,'cuda')
+        print(f'| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |')
+
+        accuracy_score(resnet,train_loader,valid_loader,test_loader,device='cuda')
+
+    elif data_set=='mnist':
+
+        # Mnist Data Fetch & Preprocessing & Split 
+        train_loader,valid_loader,test_loader,classes=data_loader_mnist()
+
+        # Model
+        resnet=ResNet18(1)
+        resnet.to('cuda')
+
+        criterion = nn.CrossEntropyLoss()
+        optimizer = torch.optim.SGD(resnet.parameters(), lr=0.01,
+                            momentum=0.9, weight_decay=5e-4)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
+
+        N_EPOCHS = 200
+        CLIP = 1
+        best_valid_loss = float('inf')
+        patient=0
+
+        for epoch in tqdm(range(N_EPOCHS)):
+            
+            start_time = time.time()
+            
+            train_loss = train(resnet, train_loader, optimizer, criterion, device='cuda')
+            valid_loss = evaluate(resnet, valid_loader, criterion, device='cuda')
+            
+            scheduler.step()
+            
+            end_time = time.time()
+            
+            epoch_mins, epoch_secs = epoch_time(start_time, end_time)
+            
+            print(f'Epoch: {epoch+1:02} | Time: {epoch_mins}m {epoch_secs}s')
+            #print(f'\tTrain Loss: {train_loss:.3f}')
+            #print(f'\t Val. Loss: {valid_loss:.3f}')
+            run["train/train_epoch_loss"].log(train_loss)
+            run["valid/valid_epoch_loss"].log(valid_loss)
+            
+            if valid_loss < best_valid_loss:
+                patient=0
+                best_valid_loss = valid_loss
+                torch.save(resnet.state_dict(), '../assets/model/mnist_resnet18-{}.pt'.format(experiment))
+            else:
+                patient+=1
+                if patient>=200:
+                    break
+
+        run.stop()
+        resnet.load_state_dict(torch.load('../assets/model/mnist_resnet18.pt'))
+        resnet.load_state_dict(torch.load('../assets/model/mnist_resnet18-{}.pt'.format(experiment)))
+        test_loss = evaluate(resnet, test_loader, criterion,'cuda')
+        print(f'| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |')
+
+        accuracy_score(resnet,train_loader,valid_loader,test_loader,device='cuda')
+
+    else:
+       raise NotImplementedError
