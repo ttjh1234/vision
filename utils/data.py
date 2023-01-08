@@ -60,7 +60,7 @@ def rescale_data(x,mean=None,std=None):
 
 
 def data_loader_mnist(path=None):
-    transform = transforms.Compose([transforms.RandomCrop(28,4),transforms.RandomHorizontalFlip(),transforms.ToTensor(),transforms.Normalize((0.3081), (0.1307))])
+    transform = transforms.Compose([transforms.RandomCrop(28,4),transforms.ToTensor(),transforms.Normalize((0.3081), (0.1307))])
     transform2 = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.3081), (0.1307))])
 
     if path:

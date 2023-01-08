@@ -216,8 +216,8 @@ if __name__ == "__main__":
     
     parser=argparse.ArgumentParser(description='Model Train')
     parser.add_argument('--dataset',required=True, help='Dataset you want to fit')
-    parser.add_argument('--experiment',required=True, default='0',help='Dataset you want to fit')
-    parser.add_argument('--run',required=True, default='0',help='Dataset you want to fit')
+    parser.add_argument('--experiment',required=True, default='0',help='Experiment Number')
+    parser.add_argument('--run',required=True, default='0',help='If run neptune')
     args=parser.parse_args()
     
     data_set=args.dataset
@@ -255,7 +255,7 @@ if __name__ == "__main__":
             
             start_time = time.time()
             
-            train_loss = train(resnet, train_loader, optimizer, criterion, CLIP, device='cuda',run_flag=run_flag)
+            train_loss = train(resnet, train_loader, optimizer, criterion, device='cuda',run_flag=run_flag)
             valid_loss = evaluate(resnet, valid_loader, criterion, device='cuda',run_flag=run_flag)
             
             scheduler.step()
@@ -311,8 +311,8 @@ if __name__ == "__main__":
             
             start_time = time.time()
             
-            train_loss = train(resnet, train_loader, optimizer, criterion, device='cuda')
-            valid_loss = evaluate(resnet, valid_loader, criterion, device='cuda')
+            train_loss = train(resnet, train_loader, optimizer, criterion, device='cuda',run_flag=run_flag)
+            valid_loss = evaluate(resnet, valid_loader, criterion, device='cuda',run_flag=run_flag)
             
             scheduler.step()
             
@@ -336,7 +336,6 @@ if __name__ == "__main__":
                     break
 
         run.stop()
-        resnet.load_state_dict(torch.load('../assets/model/mnist_resnet18.pt'))
         resnet.load_state_dict(torch.load('../assets/model/mnist_resnet18-{}.pt'.format(experiment)))
         test_loss = evaluate(resnet, test_loader, criterion,'cuda')
         print(f'| Test Loss: {test_loss:.3f} | Test PPL: {math.exp(test_loss):7.3f} |')
