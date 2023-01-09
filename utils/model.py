@@ -112,6 +112,55 @@ class ResNet(nn.Module):
 def ResNet18(in_channel):
     return ResNet(BasicBlock, [2, 2, 2, 2],in_channel=in_channel)
 
+
+class sae_encoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear1=nn.Linear(28*28,100)
+        self.act=nn.SELU()
+        self.linear2=nn.Linear(100,30)
+    
+    def forward(self,x):
+        # Input : B, C, H, W -> B, 1, 28,28
+        batch_size=x.shape[0]
+        
+        x=x.view(batch_size,-1)
+        out=self.act(self.linear1(x))
+        out=self.act(self.linear2(out))
+        
+        return out
+
+class sae_decoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear1=nn.Linear(30,100)
+        self.linear2=nn.Linear(100,28*28)
+        self.act1=nn.SELU()
+        
+    
+    def forward(self,x):
+        # Input : B, C, H, W -> B, 1, 28,28
+        batch_size=x.shape[0]
+        out=self.act1(self.linear1(x))
+        out=self.linear2(out)
+        out=out.view(batch_size,28,28)
+        return out
+
+
+
+class stacked_autoencoder(nn.Module):
+    def __init__(self,encoder, decoder):
+        super().__init__()
+        self.encoder=encoder
+        self.decoder=decoder
+
+    def forward(self, x):
+        out=self.encoder(x)
+        out=self.decoder(out)
+        
+        return out
+
+
 def train(model, iterator, optimizer, criterion, device, run_flag=0):
     
     model.train()

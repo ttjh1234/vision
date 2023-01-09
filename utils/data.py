@@ -84,3 +84,35 @@ def data_loader_mnist(path=None):
     test_loader=DataLoader(test_set,batch_size=128,shuffle=False)
 
     return train_loader,valid_loader, test_loader, classes
+
+def mnist_ig_data_loader(path=None):
+        
+    ig_scale_train=np.load('./assets/ig/ig_scale_train.npy')
+    ig_scale_valid=np.load('./assets/ig/ig_scale_valid.npy')
+    ig_scale_test=np.load('./assets/ig/ig_scale_test.npy')
+
+    ig_label_train=np.load('./assets/ig/ig_label_train.npy')
+    ig_label_valid=np.load('./assets/ig/ig_label_valid.npy')
+    ig_label_test=np.load('./assets/ig/ig_label_test.npy')
+
+    ig_scale_train=ig_scale_train.transpose([0,3,1,2])
+    ig_scale_valid=ig_scale_valid.transpose([0,3,1,2])
+    ig_scale_test=ig_scale_test.transpose([0,3,1,2])
+
+    ig_scale_train=torch.FloatTensor(ig_scale_train)
+    ig_label_train=torch.LongTensor(ig_label_train).squeeze(1)
+    train_ds = TensorDataset(ig_scale_train,ig_label_train)
+
+    ig_scale_valid=torch.FloatTensor(ig_scale_valid)
+    ig_label_valid=torch.LongTensor(ig_label_valid).squeeze(1)
+    valid_ds = TensorDataset(ig_scale_valid,ig_label_valid)
+
+    ig_scale_test=torch.FloatTensor(ig_scale_test)
+    ig_label_test=torch.LongTensor(ig_label_test).squeeze(1)
+    test_ds = TensorDataset(ig_scale_test,ig_label_test)
+
+    train_loader=DataLoader(train_ds,batch_size=128,shuffle=True)
+    valid_loader=DataLoader(valid_ds,batch_size=128,shuffle=True)
+    test_loader=DataLoader(test_ds,batch_size=128,shuffle=False)
+
+    return train_loader, valid_loader, test_loader
