@@ -590,7 +590,6 @@ Test Accuracy :  tensor(0.9973, device='cuda:0')
 '''
 
 
-
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(ig_model.parameters(), lr=0.01,
                     momentum=0.9, weight_decay=5e-4)
@@ -770,7 +769,7 @@ Test Accuracy :  tensor(0.9947, device='cuda:0')
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(ig_model.parameters(), lr=0.01,
                     momentum=0.9, weight_decay=5e-4)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
 N_EPOCHS = 100
 CLIP = 1
@@ -853,10 +852,10 @@ class ig_featureplus(nn.Module):
         out=F.relu(self.conv3(out))
         out=F.max_pool2d(out,2) # B, 128, 3, 3
                 
-        prob=F.softmax(out*feat.T)        
-        
+        weight=F.sigmoid(feat)     
+        out=out+weight*out
         out=torch.flatten(out,1)
-        out=F.relu(self.fc1(out*prob))
+        out=F.relu(self.fc1(out))
         out=self.fc2(out)
         
         return out
@@ -879,12 +878,12 @@ r=feat_ext(i[0].to('cuda'))
 
 
 criterion = nn.CrossEntropyLoss()
-optimizer = torch.optim.SGD(ig_model.parameters(), lr=0.01,
+optimizer = torch.optim.SGD(test_model.parameters(), lr=0.01,
                     momentum=0.9, weight_decay=5e-4)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100)
+scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=200)
 
 
-N_EPOCHS = 100
+N_EPOCHS = 200
 CLIP = 1
 best_valid_loss = float('inf')
 patient=0
@@ -896,7 +895,7 @@ run = neptune.init(
     project=neptune_key['project'],
     api_token=neptune_key['api_token'],
 )
-experiment=1
+experiment=3
 
 test_model.to('cuda')
 
@@ -986,6 +985,67 @@ for num_layer in range(len(outputs)):
     plt.close()
 
 
+## Exper###
 
+# (Channel)Depthwise Pooling -> Input B,128,3,3 -> B,1,3,3     ---- 1
+# Featurewise Max Pooling -> Input B,128,3,3     ---- 2
+# We want weight (prob) B,128,3,3,  
+
+origin=i[0][0]
+origin=origin.numpy()
+mnist_mean=np.array(0.3081) 
+mnist_std=np.array(0.1307)
+origin2=rescale_data(origin,mnist_mean,mnist_std)
+
+plt.imshow(origin2)
+
+class ChannelwisePool(nn.Module):
+    def __init__(self,mode='max'):
+        super().__init__()
+        self.mode=mode
+    
+    def forward(self, input):
+        n, c, w, h = input.size()
+        input = input.view(n,c,w*h).permute(0,2,1)
+        if self.mode=='max':
+            result =  torch.max(input,dim=2).values
+        else:
+            result = torch.mean(input,dim=2)
+        return result.view(n,1,w,h)
+
+
+class ig_featureplus_depth(nn.Module):
+    def __init__(self,class_num,featext,depthpool):
+        super().__init__()
+        self.class_num=class_num
+        self.conv1=nn.Conv2d(1,16,3,stride=1,padding=1)
+        self.conv2=nn.Conv2d(16,64,3,stride=1,padding=1)
+        self.conv3=nn.Conv2d(64,128,3,stride=1,padding=1)
+        self.fc1=nn.Linear(1152,512)
+        self.fc2=nn.Linear(512,self.class_num)
+        self.featext=featext
+        self.depthpool=depthpool
+
+    def forward(self, src):
+        # src : B, 1, 28, 28
+        feat=self.featext(src)
+        
+        out=F.relu(self.conv1(src)) 
+        out=F.max_pool2d(out,2) # B, 16, 14, 14
+        out=F.relu(self.conv2(out))
+        out=F.max_pool2d(out,2) # B, 64, 7, 7
+        out=F.relu(self.conv3(out))
+        out=F.max_pool2d(out,2) # B, 128, 3, 3
+        
+        depth=self.depthpool(feat)
+        depth_size=depth.size()
+        depth_weight=F.softmax(depth.view(depth.size()[0],1,-1)/torch.sqrt(depth.max()),dim=2).view(depth_size)
+        weight=F.sigmoid((1+feat)*depth_weight)
+        out=out+weight*out
+        out=torch.flatten(out,1)
+        out=F.relu(self.fc1(out))
+        out=self.fc2(out)
+        
+        return out
 
 
