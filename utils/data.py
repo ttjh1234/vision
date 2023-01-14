@@ -116,3 +116,40 @@ def mnist_ig_data_loader(path=None):
     test_loader=DataLoader(test_ds,batch_size=128,shuffle=False)
 
     return train_loader, valid_loader, test_loader
+
+
+def cifar10_experiment_load(path=None):
+    classes = ['plane', 'car', 'bird', 'cat',
+            'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+    if path==None:
+        train_data=np.load('./assets/data/experiment/cifar10_train_data.npy')
+        train_label=np.load('./assets/data/experiment/cifar10_train_label.npy')
+        valid_data=np.load('./assets/data/experiment/cifar10_valid_data.npy')
+        valid_label=np.load('./assets/data/experiment/cifar10_valid_label.npy')
+        test_data=np.load('./assets/data/experiment/cifar10_test_data.npy')
+        test_label=np.load('./assets/data/experiment/cifar10_test_label.npy')
+    
+    else:
+        train_data=np.load(path+'/cifar10_train_data.npy')
+        train_label=np.load(path+'/cifar10_train_label.npy')
+        valid_data=np.load(path+'/cifar10_valid_data.npy')
+        valid_label=np.load(path+'/cifar10_valid_label.npy')
+        test_data=np.load(path+'/cifar10_test_data.npy')
+        test_label=np.load(path+'/cifar10_test_label.npy')
+    
+    train_data=torch.FloatTensor(train_data)
+    train_label=torch.FloatTensor(train_label)
+    valid_data=torch.FloatTensor(valid_data)
+    valid_label=torch.FloatTensor(valid_label)
+    test_data=torch.FloatTensor(test_data)
+    test_label=torch.FloatTensor(test_label)
+    
+    train_ds=TensorDataset(train_data,train_label)
+    valid_ds=TensorDataset(valid_data,valid_label)
+    test_ds=TensorDataset(test_data,test_label)
+
+    train_loader=DataLoader(train_ds,batch_size=128,shuffle=True)
+    valid_loader=DataLoader(valid_ds,batch_size=128,shuffle=True)
+    test_loader=DataLoader(test_ds,batch_size=128,shuffle=False)
+
+    return train_loader, valid_loader, test_loader, classes

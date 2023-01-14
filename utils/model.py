@@ -75,6 +75,38 @@ class BasicBlock(nn.Module):
         out = F.relu(out)
         return out
 
+class Bottleneck(nn.Module):
+    expansion = 4
+
+    def __init__(self, in_planes, planes, stride=1):
+        super(Bottleneck, self).__init__()
+        self.conv1 = nn.Conv2d(in_planes, planes, kernel_size=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(planes)
+        self.conv2 = nn.Conv2d(planes, planes, kernel_size=3,
+                               stride=stride, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(planes)
+        self.conv3 = nn.Conv2d(planes, self.expansion *
+                               planes, kernel_size=1, bias=False)
+        self.bn3 = nn.BatchNorm2d(self.expansion*planes)
+
+        self.shortcut = nn.Sequential()
+        if stride != 1 or in_planes != self.expansion*planes:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_planes, self.expansion*planes,
+                          kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(self.expansion*planes)
+            )
+
+    def forward(self, x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out = F.relu(self.bn2(self.conv2(out)))
+        out = self.bn3(self.conv3(out))
+        out += self.shortcut(x)
+        out = F.relu(out)
+        return out
+
+
+
 class ResNet(nn.Module):
     def __init__(self,block, num_blocks, in_channel=3, num_classes=10):
         super(ResNet, self).__init__()
@@ -111,6 +143,18 @@ class ResNet(nn.Module):
     
 def ResNet18(in_channel):
     return ResNet(BasicBlock, [2, 2, 2, 2],in_channel=in_channel)
+
+def ResNet34(in_channel):
+    return ResNet(BasicBlock, [3, 4, 6, 3],in_channel=in_channel)
+
+def ResNet50(in_channel):
+    return ResNet(Bottleneck, [3, 4, 6, 3],in_channel=in_channel)
+
+def ResNet101(in_channel):
+    return ResNet(Bottleneck, [3, 4, 23, 3],in_channel=in_channel)
+
+def ResNet152(in_channel):
+    return ResNet(Bottleneck, [3, 8, 63, 3],in_channel=in_channel)
 
 
 class sae_encoder(nn.Module):
@@ -159,6 +203,117 @@ class stacked_autoencoder(nn.Module):
         out=self.decoder(out)
         
         return out
+
+class ChannelwisePool(nn.Module):
+    def __init__(self,mode='max'):
+        super().__init__()
+        self.mode=mode
+    
+    def forward(self, input):
+        n, c, w, h = input.size()
+        input = input.view(n,c,w*h).permute(0,2,1)
+        if self.mode=='max':
+            result =  torch.max(input,dim=2).values
+        else:
+            result = torch.mean(input,dim=2)
+        return result.view(n,1,w,h)
+
+class ig_featuremap(nn.Module):
+    def __init__(self,class_num):
+        super().__init__()
+        self.class_num=class_num
+        self.conv1=nn.Conv2d(1,16,3,stride=1,padding=1)
+        self.conv2=nn.Conv2d(16,64,3,stride=1,padding=1)
+        self.conv3=nn.Conv2d(64,128,3,stride=1,padding=1)
+        self.fc1=nn.Linear(1152,512)
+        self.fc2=nn.Linear(512,self.class_num)
+
+    def forward(self, src):
+        # src : B, 1, 28, 28
+        out=F.relu(self.conv1(src)) 
+        out=F.max_pool2d(out,2) # B, 16, 14, 14
+        out=F.relu(self.conv2(out))
+        out=F.max_pool2d(out,2) # B, 64, 7, 7
+        out=F.relu(self.conv3(out))
+        out=F.max_pool2d(out,2) # B, 128, 3, 3
+        
+        out=torch.flatten(out,1)
+        out=F.relu(self.fc1(out))
+        out=self.fc2(out)
+        
+        return out
+
+
+class ig_featureplus(nn.Module):
+    def __init__(self,class_num,featext):
+        super().__init__()
+        self.class_num=class_num
+        self.conv1=nn.Conv2d(1,16,3,stride=1,padding=1)
+        self.conv2=nn.Conv2d(16,64,3,stride=1,padding=1)
+        self.conv3=nn.Conv2d(64,128,3,stride=1,padding=1)
+        self.fc1=nn.Linear(1152,512)
+        self.fc2=nn.Linear(512,self.class_num)
+        self.featext=featext
+
+    def forward(self, src):
+        # src : B, 1, 28, 28
+        feat=self.featext(src)
+        
+        out=F.relu(self.conv1(src)) 
+        out=F.max_pool2d(out,2) # B, 16, 14, 14
+        out=F.relu(self.conv2(out))
+        out=F.max_pool2d(out,2) # B, 64, 7, 7
+        out=F.relu(self.conv3(out))
+        out=F.max_pool2d(out,2) # B, 128, 3, 3
+                
+        weight=F.sigmoid(feat)     
+        out=out+weight*out
+        out=torch.flatten(out,1)
+        out=F.relu(self.fc1(out))
+        out=self.fc2(out)
+        
+        return out
+
+
+
+class ig_featureplus_depth(nn.Module):
+    def __init__(self,class_num,featext,depthpool):
+        super().__init__()
+        self.class_num=class_num
+        self.conv1=nn.Conv2d(1,16,3,stride=1,padding=1)
+        self.conv2=nn.Conv2d(16,64,3,stride=1,padding=1)
+        self.conv3=nn.Conv2d(64,128,3,stride=1,padding=1)
+        self.fc1=nn.Linear(1152,512)
+        self.fc2=nn.Linear(512,self.class_num)
+        self.featext=featext
+        self.depthpool=depthpool
+
+    def forward(self, src):
+        # src : B, 1, 28, 28
+        feat=self.featext(src)
+        
+        out=F.relu(self.conv1(src)) 
+        out=F.max_pool2d(out,2) # B, 16, 14, 14
+        out=F.relu(self.conv2(out))
+        out=F.max_pool2d(out,2) # B, 64, 7, 7
+        out=F.relu(self.conv3(out))
+        out=F.max_pool2d(out,2) # B, 128, 3, 3
+        
+        depth=self.depthpool(feat)
+        depth_size=depth.size()
+        depth_weight=F.softmax(depth.view(depth.size()[0],1,-1)/torch.sqrt(depth.max()),dim=2).view(depth_size)
+        weight=F.sigmoid((1+feat)*depth_weight)
+        out=out+weight*out
+        out=torch.flatten(out,1)
+        out=F.relu(self.fc1(out))
+        out=self.fc2(out)
+        
+        return out
+
+
+
+
+
 
 
 def train(model, iterator, optimizer, criterion, device, run_flag=0):
@@ -259,6 +414,50 @@ def epoch_time(start_time, end_time):
     elapsed_mins = int(elapsed_time / 60)
     elapsed_secs = int(elapsed_time - (elapsed_mins * 60))
     return elapsed_mins, elapsed_secs
+
+def sae_train(model, iterator, optimizer, criterion, device, run_flag=0):
+    
+    model.train()
+    
+    epoch_loss = 0
+    
+    for _, batch in tqdm(enumerate(iterator)):
+        
+        optimizer.zero_grad()
+        batch=torch.squeeze(batch[0],dim=1)
+        src = batch.to(device)
+        target = batch.to(device)
+        
+        output = model(src)
+                    
+        loss = criterion(output, target)
+        loss.backward()
+        optimizer.step()
+        epoch_loss += loss.item()
+        if run_flag==1:
+            run["train/train_iter_loss"].log(loss.item())
+
+    return epoch_loss / len(iterator)
+
+def sae_evaluate(model, iterator, criterion, device, run_flag=0):
+    
+    model.eval()
+    epoch_loss = 0
+
+    with torch.no_grad():
+        for _, batch in enumerate(iterator):
+            batch=torch.squeeze(batch[0],dim=1)
+            src = batch.to(device)
+            trg = batch.to(device)
+            output = model(src)
+            
+            loss = criterion(output, trg)
+            epoch_loss += loss.item()
+            if run_flag==1:
+                run["valid/valid_iter_loss"].log(loss.item())
+
+    return epoch_loss / len(iterator)
+
 
 
 if __name__ == "__main__":
