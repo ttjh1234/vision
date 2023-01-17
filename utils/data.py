@@ -9,7 +9,7 @@ from torch.utils.data import TensorDataset, DataLoader,Dataset, random_split
 import torchvision
 import torchvision.transforms as transforms
 
-def data_loader_cifar10(path=None):
+def data_loader_cifar10(path=None, seed=42):
     # Cifar10 Data Fetch & Preprocessing & Split 
 
     transform = transforms.Compose([transforms.RandomCrop(32,4),transforms.RandomHorizontalFlip(),transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
@@ -22,7 +22,7 @@ def data_loader_cifar10(path=None):
     else:
         trainset = torchvision.datasets.CIFAR10("../assets/data/cifar10/train",train=True,download=False,transform=transform)
         test_set = torchvision.datasets.CIFAR10("../assets/data/cifar10/test",train=False,download=False,transform=transform2)
-    train_dataset, valid_dataset= random_split(trainset, [45000, 5000],generator=torch.Generator().manual_seed(42))
+    train_dataset, valid_dataset= random_split(trainset, [45000, 5000],generator=torch.Generator().manual_seed(seed))
 
     # label check
     label_dict=ddict(int)
@@ -39,6 +39,7 @@ def data_loader_cifar10(path=None):
     test_loader=DataLoader(test_set,batch_size=128,shuffle=False)
 
     return train_loader,valid_loader,test_loader, classes
+
 
 
 def rescale_data(x,mean=None,std=None):
@@ -138,11 +139,11 @@ def cifar10_experiment_load(path=None):
         test_label=np.load(path+'/cifar10_test_label.npy')
     
     train_data=torch.FloatTensor(train_data)
-    train_label=torch.FloatTensor(train_label)
+    train_label=torch.LongTensor(train_label)
     valid_data=torch.FloatTensor(valid_data)
-    valid_label=torch.FloatTensor(valid_label)
+    valid_label=torch.LongTensor(valid_label)
     test_data=torch.FloatTensor(test_data)
-    test_label=torch.FloatTensor(test_label)
+    test_label=torch.LongTensor(test_label)
     
     train_ds=TensorDataset(train_data,train_label)
     valid_ds=TensorDataset(valid_data,valid_label)
