@@ -9,11 +9,15 @@ import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data.sampler import SubsetRandomSampler
 
-def data_loader_cifar10(path=None):
+def data_loader_cifar10(path=None,batch_size=128,transform_flag=1):
     # Cifar10 Data Fetch & Preprocessing & Split 
 
-    transform = transforms.Compose([transforms.RandomCrop(32,4),transforms.RandomHorizontalFlip(),transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
-    transform2 = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
+    if transform_flag==1:
+        transform = transforms.Compose([transforms.RandomCrop(32,4),transforms.RandomHorizontalFlip(),transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))])
+        transform2 = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))])
+    else:
+        transform = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))])
+        transform2 = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))])
 
     if path:
         train_set = torchvision.datasets.CIFAR10(path+'/train',train=True,download=False,transform=transform)
@@ -28,16 +32,17 @@ def data_loader_cifar10(path=None):
     classes = ['plane', 'car', 'bird', 'cat',
             'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 
-    train_loader=DataLoader(train_set,batch_size=128,shuffle=True)
-    test_loader=DataLoader(test_set,batch_size=128,shuffle=False)
+    train_loader=DataLoader(train_set,batch_size=batch_size,shuffle=True)
+    test_loader=DataLoader(test_set,batch_size=batch_size,shuffle=False)
 
     return train_loader, test_loader, classes
+
 
 def fetch_subset_cifar10(path=None,subset_percent=1,seed=42):
     # Cifar10 Data Fetch & Preprocessing & Split 
 
-    transform = transforms.Compose([transforms.RandomCrop(32,4),transforms.RandomHorizontalFlip(),transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
-    transform2 = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))])
+    transform = transforms.Compose([transforms.RandomCrop(32,4),transforms.RandomHorizontalFlip(),transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))])
+    transform2 = transforms.Compose([transforms.ToTensor(),transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261))])
 
     if path:
         train_set = torchvision.datasets.CIFAR10(path+'/train',train=True,download=False,transform=transform)
@@ -65,6 +70,20 @@ def fetch_subset_cifar10(path=None,subset_percent=1,seed=42):
 
     return train_loader, test_loader, classes
 
+def get_mean_std(train_set):
+
+    # calculate mean over each channel (r,g,b)
+    mean_r = train_set[:,0,:,:].mean()
+    mean_g = train_set[:,1,:,:].mean()
+    mean_b = train_set[:,2,:,:].mean()
+    mean=np.array((mean_r,mean_g,mean_b)).reshape(-1,1,1)
+
+    # calculate std over each channel (r,g,b)
+    std_r = train_set[:,0,:,:].std()
+    std_g = train_set[:,1,:,:].std()
+    std_b = train_set[:,2,:,:].std()
+    std=np.array((std_r, std_g, std_b)).reshape(-1,1,1)
+    return mean, std
 
 
 def rescale_data(x,mean=None,std=None):
@@ -78,7 +97,7 @@ def rescale_data(x,mean=None,std=None):
         mean=np.array((0.4914, 0.4822, 0.4465)).reshape(-1,1,1)
     
     if not std:
-        std=np.array((0.2023, 0.1994, 0.2010)).reshape(-1,1,1)
+        std=np.array((0.247, 0.243, 0.261)).reshape(-1,1,1)
     
     x=x*std+mean
     x=np.transpose(x,[1,2,0])
