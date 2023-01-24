@@ -8,6 +8,9 @@ from torch.utils.data import TensorDataset, DataLoader,Dataset, random_split
 import torchvision
 import torchvision.transforms as transforms
 from torch.utils.data.sampler import SubsetRandomSampler
+import torch.nn as nn
+import torch.nn.functional as F
+from torchvision.transforms.functional import hflip
 
 def data_loader_cifar10(path=None,batch_size=128,transform_flag=1):
     # Cifar10 Data Fetch & Preprocessing & Split 
@@ -165,3 +168,140 @@ def cifar10_experiment_load(path=None):
     test_loader=DataLoader(test_ds,batch_size=128,shuffle=False)
 
     return train_loader, valid_loader, test_loader, classes
+
+
+class experiment_cifar10(Dataset):
+    """ KD Experiment Dataset """
+    
+    def __init__(self, path, train=True, usage='attkd',transform=None):
+        
+        self.usage=usage
+        self.transform=transform
+        self.classes=['plane', 'car', 'bird', 'cat',
+            'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+        
+        if train==True:
+            self.img=np.load(path+'/train_img.npy')
+            self.label=np.load(path+'/train_label.npy')
+            if self.usage=='attkd':
+                self.ig=np.load(path+'/train_scaled_ig.npy')
+        
+        else:
+            self.img=np.load(path+'/test_img.npy')
+            self.label=np.load(path+'/test_label.npy')
+            if self.usage=='attkd':
+                self.ig=np.load(path+'/test_scaled_ig.npy')
+        
+        if usage=='attkd':
+            self.data=np.concatenate([self.img,self.ig],axis=1)
+        else:
+            self.data=self.img
+            
+    
+    def __len__(self):
+        return self.data.shape[0]
+    
+    def __getitem__(self, idx):
+        image=torch.tensor(self.data[idx],dtype=torch.float)
+        label=torch.tensor(self.label[idx],dtype=torch.long)
+        
+        if self.transform:
+            image = self.transform(image)
+                
+        return image, label 
+
+
+class CifarRandomCrop(nn.Module):
+    def __init__(self, size, padding=None, fill=-99, padding_mode="constant", usage='attkd'):
+        super().__init__()
+
+        assert isinstance(size, (int, tuple))
+        if isinstance(size, int):
+            self.output_size = (size, size)
+        else:
+            assert len(size) == 2
+            self.output_size = size
+
+        self.padding = padding
+        self.fill = fill
+        self.padding_mode = padding_mode
+        self.fill_value=[-1.989,-1.984,-1.711]
+        self.usage=usage
+    
+    def channelwise_image_pad(self,img,fill_value):
+        img[0,:,:]=torch.where(img[0,:,:]==-99,fill_value[0],img[0,:,:])       
+        img[1,:,:]=torch.where(img[1,:,:]==-99,fill_value[1],img[1,:,:])
+        img[2,:,:]=torch.where(img[2,:,:]==-99,fill_value[2],img[2,:,:])
+        
+        return img
+    
+    def forward(self, data):
+        
+        if self.usage=='attkd':
+            img=data[:3,:,:]
+            ig=data[3:,:,:]     
+            
+            if self.padding is not None:
+                if isinstance(self.padding,int):
+                    padding=[self.padding]*4
+                img = F.pad(img, padding, self.padding_mode, self.fill)
+                img = self.channelwise_image_pad(img,self.fill_value)
+                ig = F.pad(ig, padding, self.padding_mode, 0)
+
+            h, w = img.shape[1], img.shape[2]
+    
+            new_h, new_w = self.output_size
+
+            top = torch.randint(0, h - new_h, size=(1,)).item()
+            left = torch.randint(0, w - new_w, size=(1,)).item()
+
+            image = img[:,top: top + new_h,
+                        left: left + new_w]
+            
+            ig = ig[:,top: top + new_h,
+                        left: left + new_w]
+            
+            crop_data=torch.cat([image,ig],dim=0)
+        else:
+            img=data
+            
+            if self.padding is not None:
+                if isinstance(self.padding,int):
+                    padding=[self.padding]*4
+                img = F.pad(img, padding, self.padding_mode, self.fill)
+                img = self.channelwise_image_pad(img,self.fill_value)
+
+            h, w = img.shape[1], img.shape[2]
+    
+            new_h, new_w = self.output_size
+
+            top = torch.randint(0, h - new_h, size=(1,)).item()
+            left = torch.randint(0, w - new_w, size=(1,)).item()
+
+            crop_data = img[:,top: top + new_h,
+                        left: left + new_w]
+            
+        return crop_data
+
+
+class CifarRandomHorizontalFlip(nn.Module):
+    def __init__(self, p=0.5, usage='attkd'):
+        super().__init__()
+
+        assert (p>=0) & (p<=1)
+        self.usage=usage
+        self.p=p
+    
+    def forward(self, data):
+        if self.usage=='attkd':
+            if torch.rand(1)<self.p:
+                img=data[:3,:,:]
+                ig=data[3:,:,:]
+                flip_img=hflip(img)
+                flip_ig=hflip(ig)
+                data=torch.cat([flip_img,flip_ig],dim=0)
+        else:
+            if torch.rand(1)<self.p:
+                img=data
+                data=hflip(img)
+        return data
