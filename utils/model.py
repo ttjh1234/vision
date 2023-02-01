@@ -139,7 +139,28 @@ class ResNet(nn.Module):
         out = out.view(out.size(0), -1)
         out = self.linear(out)
         return out
+
+
+class ResNetAT(ResNet):
+    '''
+    Attention maps of ResNet
     
+    Overloaded ResNet model to return attention maps.
+    '''
+    def forward(self,x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out1 = self.layer1(out)
+        out2 = self.layer2(out1)
+        out3 = self.layer3(out2)
+        out4 = self.layer4(out3)
+        out = F.avg_pool2d(out4, 4)
+        out = out.view(out.size(0), -1)
+        out = self.linear(out)
+        
+        return out, [g.pow(2).mean(1) for g in (out1,out2,out3,out4)]
+
+
+
 def ResNet18(in_channel):
     return ResNet(BasicBlock, [2, 2, 2, 2],in_channel=in_channel)
 
@@ -154,6 +175,22 @@ def ResNet101(in_channel):
 
 def ResNet152(in_channel):
     return ResNet(Bottleneck, [3, 8, 63, 3],in_channel=in_channel)
+
+def ResNet18AT(in_channel):
+    return ResNetAT(BasicBlock, [2, 2, 2, 2],in_channel=in_channel)
+
+def ResNet34AT(in_channel):
+    return ResNetAT(BasicBlock, [3, 4, 6, 3],in_channel=in_channel)
+
+def ResNet50AT(in_channel):
+    return ResNetAT(Bottleneck, [3, 4, 6, 3],in_channel=in_channel)
+
+def ResNet101AT(in_channel):
+    return ResNetAT(Bottleneck, [3, 4, 23, 3],in_channel=in_channel)
+
+def ResNet152AT(in_channel):
+    return ResNetAT(Bottleneck, [3, 8, 63, 3],in_channel=in_channel)
+
 
 class WRNBasicBlock(nn.Module):
     def __init__(self, in_planes, out_planes, stride, dropRate=0.0):
