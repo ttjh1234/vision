@@ -47,6 +47,38 @@ class image_classification(nn.Module):
         out=self.fc2(out)
         
         return out
+
+
+class image_classification_feature(image_classification):
+    def forward(self, src):
+        out1=F.tanh(self.conv1(src))
+        out2=F.max_pool2d(out1,2) # B, 16, 16, 16
+        out2=F.tanh(self.conv2(out2))
+        out3=F.max_pool2d(out2,2) # B, 64, 8, 8
+        out3=F.tanh(self.conv3(out3)) 
+        out4=F.max_pool2d(out3,2) # B, 128, 4, 4
+        
+        out4=torch.flatten(out4,1)
+        out=F.relu(self.fc1(out4))
+        out=self.fc2(out)
+        
+        return out, [out1,out2,out3]
+
+class image_classificationAT(image_classification):
+    def forward(self, src):
+        out1=F.tanh(self.conv1(src))
+        out2=F.max_pool2d(out1,2) # B, 16, 16, 16
+        out2=F.tanh(self.conv2(out2))
+        out3=F.max_pool2d(out2,2) # B, 64, 8, 8
+        out3=F.tanh(self.conv3(out3)) 
+        out4=F.max_pool2d(out3,2) # B, 128, 4, 4
+        
+        out4=torch.flatten(out4,1)
+        out=F.relu(self.fc1(out4))
+        out=self.fc2(out)
+        
+        return out, [g.pow(2).mean(1) for g in (out1,out2,out3)]
+
     
 class BasicBlock(nn.Module):
     expansion = 1
@@ -74,6 +106,7 @@ class BasicBlock(nn.Module):
         out += self.shortcut(x)
         out = F.relu(out)
         return out
+
 
 class Bottleneck(nn.Module):
     expansion = 4
@@ -159,6 +192,23 @@ class ResNetAT(ResNet):
         
         return out, [g.pow(2).mean(1) for g in (out1,out2,out3,out4)]
 
+class ResNetFeature(ResNet):
+    '''
+    Attention maps of ResNet
+    
+    Overloaded ResNet model to return attention maps.
+    '''
+    def forward(self,x):
+        out = F.relu(self.bn1(self.conv1(x)))
+        out1 = self.layer1(out)
+        out2 = self.layer2(out1)
+        out3 = self.layer3(out2)
+        out4 = self.layer4(out3)
+        out = F.avg_pool2d(out4, 4)
+        out = out.view(out.size(0), -1)
+        out = self.linear(out)
+        
+        return out, [out1,out2,out3,out4]
 
 
 def ResNet18(in_channel):
@@ -190,6 +240,21 @@ def ResNet101AT(in_channel):
 
 def ResNet152AT(in_channel):
     return ResNetAT(Bottleneck, [3, 8, 63, 3],in_channel=in_channel)
+
+def ResNet18Feature(in_channel):
+    return ResNetFeature(BasicBlock, [2, 2, 2, 2],in_channel=in_channel)
+
+def ResNet34Feature(in_channel):
+    return ResNetFeature(BasicBlock, [3, 4, 6, 3],in_channel=in_channel)
+
+def ResNet50Feature(in_channel):
+    return ResNetFeature(Bottleneck, [3, 4, 6, 3],in_channel=in_channel)
+
+def ResNet101Feature(in_channel):
+    return ResNetFeature(Bottleneck, [3, 4, 23, 3],in_channel=in_channel)
+
+def ResNet152Feature(in_channel):
+    return ResNetFeature(Bottleneck, [3, 8, 63, 3],in_channel=in_channel)
 
 
 class WRNBasicBlock(nn.Module):
