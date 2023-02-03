@@ -173,7 +173,7 @@ def cifar10_experiment_load(path=None):
 class experiment_cifar10(Dataset):
     """ KD Experiment Dataset """
     
-    def __init__(self, path, train=True, usage='attkd',transform=None):
+    def __init__(self, path, train=True, usage='proposed',transform=None):
         
         self.usage=usage
         self.transform=transform
@@ -192,7 +192,7 @@ class experiment_cifar10(Dataset):
             if self.usage=='attkd':
                 self.ig=np.load(path+'/test_scaled_ig.npy')
         
-        if usage=='attkd':
+        if usage=='proposed':
             self.data=np.concatenate([self.img,self.ig],axis=1)
         else:
             self.data=self.img
@@ -211,8 +211,51 @@ class experiment_cifar10(Dataset):
         return image, label 
 
 
+class experiment_cifar10_2(Dataset):
+    """ KD Experiment Dataset """
+    
+    def __init__(self, path, train=True, usage='proposed',transform=None):
+        
+        self.usage=usage
+        self.transform=transform
+        self.classes=['plane', 'car', 'bird', 'cat',
+            'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+        
+        if train==True:
+            self.img=np.load(path+'/train_img.npy')
+            self.label=np.load(path+'/train_label.npy')
+            if self.usage=='attkd':
+                self.ig=np.load(path+'/train_ig.npy')
+        
+        else:
+            self.img=np.load(path+'/test_img.npy')
+            self.label=np.load(path+'/test_label.npy')
+            if self.usage=='attkd':
+                self.ig=np.load(path+'/test_ig.npy')
+        
+        if usage=='proposed':
+            self.data=np.concatenate([self.img,self.ig],axis=1)
+        else:
+            self.data=self.img
+            
+    
+    def __len__(self):
+        return self.data.shape[0]
+    
+    def __getitem__(self, idx):
+        image=torch.tensor(self.data[idx],dtype=torch.float)
+        label=torch.tensor(self.label[idx],dtype=torch.long)
+        
+        if self.transform:
+            image = self.transform(image)
+                
+        return image, label 
+
+
+
+
 class CifarRandomCrop(nn.Module):
-    def __init__(self, size, padding=None, fill=-99, padding_mode="constant", usage='attkd'):
+    def __init__(self, size, padding=None, fill=-99, padding_mode="constant", usage='proposed'):
         super().__init__()
 
         assert isinstance(size, (int, tuple))
@@ -237,7 +280,7 @@ class CifarRandomCrop(nn.Module):
     
     def forward(self, data):
         
-        if self.usage=='attkd':
+        if self.usage=='proposed':
             img=data[:3,:,:]
             ig=data[3:,:,:]     
             
@@ -285,7 +328,7 @@ class CifarRandomCrop(nn.Module):
 
 
 class CifarRandomHorizontalFlip(nn.Module):
-    def __init__(self, p=0.5, usage='attkd'):
+    def __init__(self, p=0.5, usage='proposed'):
         super().__init__()
 
         assert (p>=0) & (p<=1)
@@ -293,7 +336,7 @@ class CifarRandomHorizontalFlip(nn.Module):
         self.p=p
     
     def forward(self, data):
-        if self.usage=='attkd':
+        if self.usage=='proposed':
             if torch.rand(1)<self.p:
                 img=data[:3,:,:]
                 ig=data[3:,:,:]
