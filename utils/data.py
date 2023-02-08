@@ -88,7 +88,6 @@ def get_mean_std(train_set):
     std=np.array((std_r, std_g, std_b)).reshape(-1,1,1)
     return mean, std
 
-
 def rescale_data(x,mean=None,std=None):
     
     '''
@@ -183,13 +182,13 @@ class experiment_cifar10(Dataset):
         if train==True:
             self.img=np.load(path+'/train_img.npy')
             self.label=np.load(path+'/train_label.npy')
-            if self.usage=='attkd':
+            if self.usage=='proposed':
                 self.ig=np.load(path+'/train_scaled_ig.npy')
         
         else:
             self.img=np.load(path+'/test_img.npy')
             self.label=np.load(path+'/test_label.npy')
-            if self.usage=='attkd':
+            if self.usage=='proposed':
                 self.ig=np.load(path+'/test_scaled_ig.npy')
         
         if usage=='proposed':
@@ -224,13 +223,13 @@ class experiment_cifar10_2(Dataset):
         if train==True:
             self.img=np.load(path+'/train_img.npy')
             self.label=np.load(path+'/train_label.npy')
-            if self.usage=='attkd':
+            if self.usage=='proposed':
                 self.ig=np.load(path+'/train_ig.npy')
         
         else:
             self.img=np.load(path+'/test_img.npy')
             self.label=np.load(path+'/test_label.npy')
-            if self.usage=='attkd':
+            if self.usage=='proposed':
                 self.ig=np.load(path+'/test_ig.npy')
         
         if usage=='proposed':
@@ -250,6 +249,48 @@ class experiment_cifar10_2(Dataset):
             image = self.transform(image)
                 
         return image, label 
+
+
+class experiment_cifar10_wrn(Dataset):
+    """ KD Experiment Dataset """
+    
+    def __init__(self, path, train=True, usage='proposed',transform=None):
+        
+        self.usage=usage
+        self.transform=transform
+        self.classes=['plane', 'car', 'bird', 'cat',
+            'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+        
+        if train==True:
+            self.img=np.load(path+'/train_img.npy')
+            self.label=np.load(path+'/train_label.npy')
+            if self.usage=='proposed':
+                self.ig=np.load(path+'/train_scaled_ig_wrn.npy')
+        
+        else:
+            self.img=np.load(path+'/test_img.npy')
+            self.label=np.load(path+'/test_label.npy')
+            if self.usage=='proposed':
+                self.ig=np.load(path+'/test_scaled_ig_wrn.npy')
+        
+        if usage=='proposed':
+            self.data=np.concatenate([self.img,self.ig],axis=1)
+        else:
+            self.data=self.img
+            
+    
+    def __len__(self):
+        return self.data.shape[0]
+    
+    def __getitem__(self, idx):
+        image=torch.tensor(self.data[idx],dtype=torch.float)
+        label=torch.tensor(self.label[idx],dtype=torch.long)
+        
+        if self.transform:
+            image = self.transform(image)
+                
+        return image, label 
+
 
 
 
