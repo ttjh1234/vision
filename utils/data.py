@@ -292,9 +292,6 @@ class experiment_cifar10_wrn(Dataset):
         return image, label 
 
 
-
-
-
 class CifarRandomCrop(nn.Module):
     def __init__(self, size, padding=None, fill=-99, padding_mode="constant", usage='proposed'):
         super().__init__()
