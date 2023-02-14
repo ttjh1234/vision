@@ -210,6 +210,8 @@ class ResNetFeature(ResNet):
         
         return out, [out1,out2,out3,out4]
 
+def ResNet10(in_channel):
+    return ResNet(BasicBlock, [1, 1, 1, 1],in_channel=in_channel)
 
 def ResNet18(in_channel):
     return ResNet(BasicBlock, [2, 2, 2, 2],in_channel=in_channel)
@@ -240,6 +242,10 @@ def ResNet101AT(in_channel):
 
 def ResNet152AT(in_channel):
     return ResNetAT(Bottleneck, [3, 8, 63, 3],in_channel=in_channel)
+
+def ResNet10Feature(in_channel):
+    return ResNetFeature(BasicBlock, [1, 1, 1, 1],in_channel=in_channel)
+
 
 def ResNet18Feature(in_channel):
     return ResNetFeature(BasicBlock, [2, 2, 2, 2],in_channel=in_channel)
@@ -336,6 +342,23 @@ class WideResNet(nn.Module):
         out = F.avg_pool2d(out, 8)
         out = out.view(-1, self.nChannels)
         return self.fc(out)
+
+class WideResNetFeature(WideResNet):
+    '''
+    Attention maps of ResNet
+    
+    Overloaded ResNet model to return attention maps.
+    '''
+    def forward(self,x):
+        out = self.conv1(x)
+        out1 = self.block1(out)
+        out2 = self.block2(out1)
+        out3 = self.block3(out2)
+        out4 = self.relu(self.bn1(out3))
+        out4 = F.avg_pool2d(out4, 8)
+        out = out4.view(-1, self.nChannels)
+
+        return self.fc(out), [out1,out2,out3]
 
 
 class ResNeXtBottleneck(nn.Module):

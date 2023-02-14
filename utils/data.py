@@ -283,7 +283,7 @@ class experiment_cifar10_wrn(Dataset):
         return self.data.shape[0]
     
     def __getitem__(self, idx):
-        image=torch.tensor(self.data[idx],dtype=torch.float)
+        image=torch.tensor(self.data[idx],dtype=torch.float32)
         label=torch.tensor(self.label[idx],dtype=torch.long)
         
         if self.transform:
@@ -306,7 +306,7 @@ class CifarRandomCrop(nn.Module):
         self.padding = padding
         self.fill = fill
         self.padding_mode = padding_mode
-        self.fill_value=[-1.989,-1.984,-1.711]
+        self.fill_value=torch.tensor([-1.989,-1.984,-1.711],dtype=torch.float32)
         self.usage=usage
     
     def channelwise_image_pad(self,img,fill_value):
