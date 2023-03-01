@@ -251,6 +251,88 @@ class experiment_cifar10_2(Dataset):
         return image, label 
 
 
+class experiment_cifar10_guided(Dataset):
+    """ KD Experiment Dataset """
+    
+    def __init__(self, path, train=True, usage='proposed',transform=None):
+        
+        self.usage=usage
+        self.transform=transform
+        self.classes=['plane', 'car', 'bird', 'cat',
+            'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+        
+        if train==True:
+            self.img=np.load(path+'/train_img.npy')
+            self.label=np.load(path+'/train_label.npy')
+            if self.usage=='proposed':
+                self.ig=np.load(path+'/train_gig.npy')
+        
+        else:
+            self.img=np.load(path+'/test_img.npy')
+            self.label=np.load(path+'/test_label.npy')
+            if self.usage=='proposed':
+                self.ig=np.load(path+'/test_gig.npy')
+        
+        if usage=='proposed':
+            self.data=np.concatenate([self.img,self.ig],axis=1)
+        else:
+            self.data=self.img
+            
+    
+    def __len__(self):
+        return self.data.shape[0]
+    
+    def __getitem__(self, idx):
+        image=torch.tensor(self.data[idx],dtype=torch.float)
+        label=torch.tensor(self.label[idx],dtype=torch.long)
+        
+        if self.transform:
+            image = self.transform(image)
+                
+        return image, label 
+
+class experiment_cifar10_scale_guided(Dataset):
+    """ KD Experiment Dataset """
+    
+    def __init__(self, path, train=True, usage='proposed',transform=None):
+        
+        self.usage=usage
+        self.transform=transform
+        self.classes=['plane', 'car', 'bird', 'cat',
+            'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
+        
+        if train==True:
+            self.img=np.load(path+'/train_img.npy')
+            self.label=np.load(path+'/train_label.npy')
+            if self.usage=='proposed':
+                self.ig=np.load(path+'/train_scaled_gig.npy')
+        
+        else:
+            self.img=np.load(path+'/test_img.npy')
+            self.label=np.load(path+'/test_label.npy')
+            if self.usage=='proposed':
+                self.ig=np.load(path+'/test_scaled_gig.npy')
+        
+        if usage=='proposed':
+            self.data=np.concatenate([self.img,self.ig],axis=1)
+        else:
+            self.data=self.img
+            
+    
+    def __len__(self):
+        return self.data.shape[0]
+    
+    def __getitem__(self, idx):
+        image=torch.tensor(self.data[idx],dtype=torch.float)
+        label=torch.tensor(self.label[idx],dtype=torch.long)
+        
+        if self.transform:
+            image = self.transform(image)
+                
+        return image, label 
+
+
+
 class experiment_cifar10_wrn(Dataset):
     """ KD Experiment Dataset """
     
@@ -283,13 +365,16 @@ class experiment_cifar10_wrn(Dataset):
         return self.data.shape[0]
     
     def __getitem__(self, idx):
-        image=torch.tensor(self.data[idx],dtype=torch.float32)
+        image=torch.tensor(self.data[idx],dtype=torch.float)
         label=torch.tensor(self.label[idx],dtype=torch.long)
         
         if self.transform:
             image = self.transform(image)
                 
         return image, label 
+
+
+
 
 
 class CifarRandomCrop(nn.Module):
@@ -306,7 +391,7 @@ class CifarRandomCrop(nn.Module):
         self.padding = padding
         self.fill = fill
         self.padding_mode = padding_mode
-        self.fill_value=torch.tensor([-1.989,-1.984,-1.711],dtype=torch.float32)
+        self.fill_value=[-1.989,-1.984,-1.711]
         self.usage=usage
     
     def channelwise_image_pad(self,img,fill_value):
